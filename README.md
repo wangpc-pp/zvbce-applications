@@ -9,6 +9,10 @@ Zvbext proposal gist and one LLM tokenizer workload:
 - encoding and decoding classified 1/2/3/4-byte UTF-8 payloads used by
   tokenizer frontends.
 
+It also includes a C++20 compatibility implementation of
+[WG21 P3104R0, Bit permutations](https://wg21.link/p3104r0), together with
+executable examples for all eight proposed operations.
+
 ## Project Layout
 
 - `applications.h`: common interface implemented by all variants;
@@ -17,16 +21,90 @@ Zvbext proposal gist and one LLM tokenizer workload:
 - `rvv_without_zvbext.c`: RVV implementation using shifts and Boolean
   operations;
 - `rvv_with_zvbext.c`: RVV implementation using `vbcompress` and `vbexpand`;
-- `CMakeLists.txt`: builds the three executables;
+- `CMakeLists.txt`: builds the three original C executables and two P3104R0
+  C++ executables;
 - `cmake/riscv64-toolchain.cmake`: environment-driven cross-compilation file;
 - `scripts/run-qemu.sh`: runs all executables under QEMU;
 - `scripts/count-instructions.sh`: counts dynamic instructions with QEMU's
   `libinsn.so` plugin;
-- `TOKENIZERS.md`: source-backed analysis of Hugging Face Tokenizers.
+- `TOKENIZERS.md`: source-backed analysis of Hugging Face Tokenizers;
+- `p3104/bit_permutations.hpp`: portable C++20 implementation of the eight
+  functions proposed by P3104R0;
+- `p3104/examples.cpp`: exhaustive small-type tests plus application examples
+  for bitmap mirroring, Morton/Z-order indexing, UTF-8 payload reshaping, and
+  fixed-size subset enumeration;
+- `p3104/batch.hpp`: common batched interface for shared and per-element masks;
+- `p3104/batch_portable.cpp`: scalar batched adapter built from the P3104R0
+  functions;
+- `p3104/batch_zvbext.cpp`: explicit RVV implementation of the same batched
+  interface using `vbcompress.vx`/`vbexpand.vx` for shared masks and
+  `vbcompress.vv`/`vbexpand.vv` for per-element masks.
 
-All three implementations export the same function names. The driver contains
-no implementation-selection preprocessor macros; CMake selects the
-implementation by linking a different source file.
+The three C implementations export the same function names, and their driver
+contains no implementation-selection preprocessor macros. The two C++
+executables similarly share one P3104R0 test/application driver while CMake
+links either the portable or the explicit Zvbext batch backend.
+
+The P3104R0 compatibility functions live in namespace `p3104r0`. Applications
+must not add them to `std`; doing so before the standard library provides the
+final facility would be undefined behavior. The proposal's feature-test macro
+value is intentionally not emulated because R0 specifies it only as the
+placeholder `20XXXXL`.
+
+## P3104R0 Interface and Applications
+
+The compatibility header implements the exact R0 function set:
+
+```cpp
+bit_reverse(x)
+bit_repeat(x, length)
+next_bit_permutation(x)
+prev_bit_permutation(x)
+bit_compressr(x, mask)
+bit_expandr(x, mask)
+bit_compressl(x, mask)
+bit_expandl(x, mask)
+```
+
+All functions are `constexpr` and constrained to unsigned integer types other
+than `bool`. As specified by R0, `bit_repeat` requires `length > 0` and is the
+only function above that is not declared `noexcept`.
+
+R0's worked `bit_reverse(uint32_t{0x00001234})` example prints
+`0x24c80000`, but its normative formula and its own illustrative loop both
+produce `0x2c480000`. This implementation follows the specified full-width bit
+reversal semantics (`0x2c480000`) and tests that result.
+
+The examples connect the primitives to concrete workloads:
+
+| Operation | Example | Why it is useful |
+|---|---|---|
+| `bit_reverse` | 1-bit-per-pixel bitmap mirroring | Reverses a full scanline without per-pixel indexing |
+| `bit_repeat` | Morton even/odd masks | Expresses `0x55555555` and `0xaaaaaaaa` without magic constants |
+| `bit_compressr` / `bit_expandr` | Morton/Z-order and UTF-8 payloads | Gathers or scatters non-contiguous bits while preserving order |
+| `next_bit_permutation` / `prev_bit_permutation` | Fixed-size subsets | Enumerates all bitsets with a fixed population count |
+| left-oriented compress/expand | Full-domain differential tests | Supports formats whose packed field is aligned to the most-significant edge |
+
+Other potential uses identified by the proposal include CRC processing, FFT
+bit-reversed addressing, recurring debug/test patterns, chess bitboards, and
+genomics. The same primitives can also express protocol bit-field extraction,
+bitmap-index compaction, fixed-Hamming-weight fuzzing, and sparse hardware
+register layouts. Those latter examples are engineering extrapolations rather
+than claims made directly by P3104R0.
+
+Each P3104 executable exhaustively checks every `uint8_t` input for
+reverse/repeat/next/previous and all 65,536 `(value, mask)` pairs for each
+compress/expand direction. It also tests zero-length, tail-length, and in-place
+batch calls before running the larger application examples.
+
+On Clang versions that provide `__builtin_elementwise_pext` and
+`__builtin_elementwise_pdep`, the scalar compatibility functions use those
+builtins. This keeps constant evaluation available and exposes the semantic
+operations to the optimizer. The Zvbext executable additionally links an
+explicit batched backend: Morton uses the `.vx` forms because every element
+shares an interleave mask, while UTF-8 uses the `.vv` forms because each code
+point has a length-dependent payload mask. The portable executable links the
+same applications to scalar loops instead.
 
 ## Scope
 
@@ -55,6 +133,7 @@ Set the following environment variables:
 | Variable | Required | Description |
 |---|---|---|
 | `RISCV_CLANG` | yes | Clang executable with Zvbext support |
+| `RISCV_CLANGXX` | optional | Clang++ executable; defaults to `clang++` next to `RISCV_CLANG` |
 | `RISCV_SYSROOT` | yes | RISC-V Linux sysroot |
 | `RISCV_GCC_TOOLCHAIN` | optional | GCC toolchain root used by Clang for runtime objects and libraries |
 | `QEMU_RISCV64` | for execution | `qemu-riscv64` executable with Zvbext support |
@@ -69,6 +148,7 @@ Example environment setup:
 
 ```sh
 export RISCV_CLANG=/path/to/clang
+export RISCV_CLANGXX=/path/to/clang++
 export RISCV_SYSROOT=/path/to/riscv/sysroot
 export RISCV_GCC_TOOLCHAIN=/path/to/riscv/toolchain
 export QEMU_RISCV64=/path/to/qemu-riscv64
@@ -91,6 +171,8 @@ The build creates:
 - `build/run-scalar`
 - `build/run-rvv`
 - `build/run-zvbext`
+- `build/run-p3104`
+- `build/run-p3104-zvbext`
 
 Static linking is enabled by default. Disable it when using a dynamic sysroot:
 
@@ -114,17 +196,24 @@ Or run an existing build:
 scripts/run-qemu.sh build
 ```
 
-The script runs the scalar implementation once, runs both vector
-implementations at VLEN 128/256/512, and verifies that the Zvbext binary fails
-when the extension is disabled.
+The script runs the scalar and portable P3104 implementations once, runs the
+vector implementations and P3104 Zvbext build at VLEN 128/256/512, and verifies
+that both Zvbext binaries fail when the extension is disabled.
 
-All implementations must produce these checksums:
+The three original C implementations must produce these checksums:
 
 ```text
 Base64 reshape:   f6e12d313365e693
 ULEB128 payloads: f8c9c4d4aa5469ef
 Morton 2D:        fb4d798cd8c9a83f
 Tokenizer UTF-8:  229c5e13cd63a314
+```
+
+Both P3104R0 backends must produce these application checksums:
+
+```text
+Morton/Z-order:   73fafc9799b5b0ad
+UTF-8 payloads:   fd44b68e0429510c
 ```
 
 ## Dynamic Instruction Counting
@@ -142,8 +231,11 @@ cmake --build build --target instruction-count
 ```
 
 The script reports total dynamic instructions and selected instruction-prefix
-hit counts for the scalar, RVV, and Zvbext binaries. Override the selected
-prefixes with `QEMU_INSN_MATCHES`.
+hit counts for all five binaries. With the default match set it additionally
+requires the P3104R0 Zvbext executable to execute each of `vbcompress.vx`,
+`vbcompress.vv`, `vbexpand.vx`, and `vbexpand.vv`. Override the reporting
+prefixes with `QEMU_INSN_MATCHES`; doing so disables this default four-form
+gate.
 
 The Zvbext kernels contain `vbcompress.vx`/`vbexpand.vx` and
 `vbcompress.vv`/`vbexpand.vv`. The plain RVV kernels expand the same work into
