@@ -1,11 +1,11 @@
-# Hugging Face Tokenizers and Zvbext
+# Hugging Face Tokenizers and Zvbce
 
 This analysis is based on Hugging Face `tokenizers` main commit
 `447890f84deab25794ccfdee2a877901b6893569`.
 
 ## Conclusion
 
-Zvbext can help tokenizer implementations, but its direct use is limited to
+Zvbce can help tokenizer implementations, but its direct use is limited to
 element-wise bit gather/scatter in UTF-8 and ByteLevel frontend/backend code.
 It does not directly accelerate BPE merging, vocabulary hashing, or priority
 queues.
@@ -49,7 +49,7 @@ Other model implementations repeatedly depend on UTF-8 character boundaries:
 - Unigram advances its lattice by the first character's `len_utf8()`:
   `tokenizers/src/models/unigram/model.rs:175`
 
-If a tokenizer adds a batched UTF-8 classification/decoding frontend, Zvbext
+If a tokenizer adds a batched UTF-8 classification/decoding frontend, Zvbce
 can shorten the bit-reshape stage from classified characters to code points
 and from code points to UTF-8 payloads.
 
@@ -97,12 +97,12 @@ vbexpand(0x00004f60, 0x000f3f3f) | 0x00e08080 = 0x00e4bda0
 
 With an optimized Clang 24 build:
 
-| Kernel | Plain RVV loop | Zvbext loop |
+| Kernel | Plain RVV loop | Zvbce loop |
 |---|---:|---:|
 | UTF-8 payload decode | 28 dynamic instructions | 11 dynamic instructions |
 | UTF-8 payload encode | 33 dynamic instructions | 14 dynamic instructions |
 
-The Zvbext decode core is:
+The Zvbce decode core is:
 
 ```asm
 vle32.v        v8, (packed)

@@ -1,7 +1,7 @@
-# Zvbext Application Examples
+# Zvbce Application Examples
 
 This project provides executable C examples for three workloads from the
-Zvbext proposal gist and one LLM tokenizer workload:
+Zvbce proposal gist and one LLM tokenizer workload:
 
 - packing and expanding four 6-bit Base64 fields;
 - spreading and gathering four 7-bit ULEB128 payloads;
@@ -18,9 +18,9 @@ executable examples for all eight proposed operations.
 - `applications.h`: common interface implemented by all variants;
 - `run.c`: the single test driver shared by all variants;
 - `reference.c`: scalar C reference implementation;
-- `rvv_without_zvbext.c`: RVV implementation using shifts and Boolean
+- `rvv_without_zvbce.c`: RVV implementation using shifts and Boolean
   operations;
-- `rvv_with_zvbext.c`: RVV implementation using `vbcompress` and `vbexpand`;
+- `rvv_with_zvbce.c`: RVV implementation using `vbcompress` and `vbexpand`;
 - `CMakeLists.txt`: builds the three original C executables and two P3104R0
   C++ executables;
 - `cmake/riscv64-toolchain.cmake`: environment-driven cross-compilation file;
@@ -36,14 +36,14 @@ executable examples for all eight proposed operations.
 - `p3104/batch.hpp`: common batched interface for shared and per-element masks;
 - `p3104/batch_portable.cpp`: scalar batched adapter built from the P3104R0
   functions;
-- `p3104/batch_zvbext.cpp`: explicit RVV implementation of the same batched
+- `p3104/batch_zvbce.cpp`: explicit RVV implementation of the same batched
   interface using `vbcompress.vx`/`vbexpand.vx` for shared masks and
   `vbcompress.vv`/`vbexpand.vv` for per-element masks.
 
 The three C implementations export the same function names, and their driver
 contains no implementation-selection preprocessor macros. The two C++
 executables similarly share one P3104R0 test/application driver while CMake
-links either the portable or the explicit Zvbext batch backend.
+links either the portable or the explicit Zvbce batch backend.
 
 The P3104R0 compatibility functions live in namespace `p3104r0`. Applications
 must not add them to `std`; doing so before the standard library provides the
@@ -100,7 +100,7 @@ batch calls before running the larger application examples.
 On Clang versions that provide `__builtin_elementwise_pext` and
 `__builtin_elementwise_pdep`, the scalar compatibility functions use those
 builtins. This keeps constant evaluation available and exposes the semantic
-operations to the optimizer. The Zvbext executable additionally links an
+operations to the optimizer. The Zvbce executable additionally links an
 explicit batched backend: Morton uses the `.vx` forms because every element
 shares an interleave mask, while UTF-8 uses the `.vv` forms because each code
 point has a length-dependent payload mask. The portable executable links the
@@ -125,18 +125,18 @@ with `vcompress.vm`, which compacts whole vector elements.
 ## Prerequisites
 
 PoC softwares:
-* LLVM: https://github.com/wangpc-pp/llvm-project/tree/main-riscv-zvbext
-* QEMU: https://github.com/wangpc-pp/qemu/tree/master-zvbext
+* LLVM: https://github.com/wangpc-pp/llvm-project/tree/main-riscv-zvbce
+* QEMU: https://github.com/wangpc-pp/qemu/tree/master-zvbce
 
 Set the following environment variables:
 
 | Variable | Required | Description |
 |---|---|---|
-| `RISCV_CLANG` | yes | Clang executable with Zvbext support |
+| `RISCV_CLANG` | yes | Clang executable with Zvbce support |
 | `RISCV_CLANGXX` | optional | Clang++ executable; defaults to `clang++` next to `RISCV_CLANG` |
 | `RISCV_SYSROOT` | yes | RISC-V Linux sysroot |
 | `RISCV_GCC_TOOLCHAIN` | optional | GCC toolchain root used by Clang for runtime objects and libraries |
-| `QEMU_RISCV64` | for execution | `qemu-riscv64` executable with Zvbext support |
+| `QEMU_RISCV64` | for execution | `qemu-riscv64` executable with Zvbce support |
 | `QEMU_INSN_PLUGIN` | for counting | QEMU `libinsn.so` plugin |
 | `BUILD_DIR` | optional | Build directory; defaults to `build` |
 | `BUILD_JOBS` | optional | Parallel build jobs |
@@ -170,16 +170,16 @@ The build creates:
 
 - `build/run-scalar`
 - `build/run-rvv`
-- `build/run-zvbext`
+- `build/run-zvbce`
 - `build/run-p3104`
-- `build/run-p3104-zvbext`
+- `build/run-p3104-zvbce`
 
 Static linking is enabled by default. Disable it when using a dynamic sysroot:
 
 ```sh
 cmake -S . -B build \
   -DCMAKE_TOOLCHAIN_FILE=cmake/riscv64-toolchain.cmake \
-  -DZVBEXT_APPLICATIONS_STATIC_LINK=OFF
+  -DZVBCE_APPLICATIONS_STATIC_LINK=OFF
 ```
 
 ## Run Under QEMU
@@ -197,8 +197,8 @@ scripts/run-qemu.sh build
 ```
 
 The script runs the scalar and portable P3104 implementations once, runs the
-vector implementations and P3104 Zvbext build at VLEN 128/256/512, and verifies
-that both Zvbext binaries fail when the extension is disabled.
+vector implementations and P3104 Zvbce build at VLEN 128/256/512, and verifies
+that both Zvbce binaries fail when the extension is disabled.
 
 The three original C implementations must produce these checksums:
 
@@ -232,19 +232,19 @@ cmake --build build --target instruction-count
 
 The script reports total dynamic instructions and selected instruction-prefix
 hit counts for all five binaries. With the default match set it additionally
-requires the P3104R0 Zvbext executable to execute each of `vbcompress.vx`,
+requires the P3104R0 Zvbce executable to execute each of `vbcompress.vx`,
 `vbcompress.vv`, `vbexpand.vx`, and `vbexpand.vv`. Override the reporting
 prefixes with `QEMU_INSN_MATCHES`; doing so disables this default four-form
 gate.
 
-The Zvbext kernels contain `vbcompress.vx`/`vbexpand.vx` and
+The Zvbce kernels contain `vbcompress.vx`/`vbexpand.vx` and
 `vbcompress.vv`/`vbexpand.vv`. The plain RVV kernels expand the same work into
 multiple `vsll`, `vsrl`, `vand`, and `vor` operations.
 
 The following loop-body counts were obtained from optimized assembly and
 include `vsetvli`, memory operations, pointer updates, and branches:
 
-| Scenario | Plain RVV | Zvbext RVV |
+| Scenario | Plain RVV | Zvbce RVV |
 |---|---:|---:|
 | Base64 decode reshape | 18 | 9 |
 | Base64 encode reshape | 18 | 9 |

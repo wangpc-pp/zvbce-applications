@@ -4,7 +4,7 @@
 
 namespace p3104_batch {
 
-const char *backend_name() noexcept { return "RVV + Zvbext"; }
+const char *backend_name() noexcept { return "RVV + Zvbce"; }
 
 void bit_compressr(const std::uint32_t *input, std::uint32_t mask,
                    std::uint32_t *output, std::size_t count) {

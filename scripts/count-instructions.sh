@@ -27,23 +27,23 @@ fi
 declare -a names=(
   "scalar"
   "rvv"
-  "zvbext"
+  "zvbce"
   "p3104"
-  "p3104-zvbext"
+  "p3104-zvbce"
 )
 declare -a executables=(
   "run-scalar"
   "run-rvv"
-  "run-zvbext"
+  "run-zvbce"
   "run-p3104"
-  "run-p3104-zvbext"
+  "run-p3104-zvbce"
 )
 declare -a cpus=(
-  "max,v=false,zvbext=false"
-  "max,v=true,vlen=${VLEN},zvbext=false"
-  "max,v=true,vlen=${VLEN},zvbext=true"
-  "max,v=false,zvbext=false"
-  "max,v=true,vlen=${VLEN},zvbext=true"
+  "max,v=false,zvbce=false"
+  "max,v=true,vlen=${VLEN},zvbce=false"
+  "max,v=true,vlen=${VLEN},zvbce=true"
+  "max,v=false,zvbce=false"
+  "max,v=true,vlen=${VLEN},zvbce=true"
 )
 
 match_arguments=""
@@ -56,10 +56,10 @@ if [[ ${QEMU_INSN_MATCHES+x} != x ]]; then
     log_file=$(mktemp)
     trap 'rm -f "${log_file}"' EXIT
     "${QEMU_RISCV64}" \
-      -cpu "max,v=true,vlen=${VLEN},zvbext=true" \
+      -cpu "max,v=true,vlen=${VLEN},zvbce=true" \
       -plugin "${QEMU_INSN_PLUGIN},inline=true,match=${required}" \
       -d plugin \
-      "${BUILD_DIR}/run-p3104-zvbext" \
+      "${BUILD_DIR}/run-p3104-zvbce" \
       >/dev/null 2>"${log_file}"
     hits=$(awk -v needle="${required}" '
       $1 == "Match:" {
@@ -70,14 +70,14 @@ if [[ ${QEMU_INSN_MATCHES+x} != x ]]; then
       END { if (!found) print 0 }
     ' "${log_file}")
     if [[ ${hits} -eq 0 ]]; then
-      echo "error: run-p3104-zvbext executed no ${required} instructions" >&2
+      echo "error: run-p3104-zvbce executed no ${required} instructions" >&2
       rm -f "${log_file}"
       exit 1
     fi
     rm -f "${log_file}"
     trap - EXIT
   done
-  echo "P3104R0 Zvbext instruction-form checks passed"
+  echo "P3104R0 Zvbce instruction-form checks passed"
 fi
 
 printf "%-10s %15s" "variant" "total-insns"

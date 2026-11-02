@@ -13,10 +13,10 @@
  * elements, while these algorithms move selected bits within each element.
  */
 
-const char *implementation_name(void) { return "RVV without Zvbext"; }
+const char *implementation_name(void) { return "RVV without Zvbce"; }
 
-static vuint32m1_t base64_pack6_without_zvbext(vuint32m1_t reversed_words,
-                                               size_t vl) {
+static vuint32m1_t base64_pack6_without_zvbce(vuint32m1_t reversed_words,
+                                              size_t vl) {
   vuint32m1_t field0 =
       __riscv_vand_vx_u32m1(reversed_words, UINT32_C(0x0000003f), vl);
   vuint32m1_t field1 = __riscv_vsrl_vx_u32m1(reversed_words, 2, vl);
@@ -31,8 +31,8 @@ static vuint32m1_t base64_pack6_without_zvbext(vuint32m1_t reversed_words,
   return __riscv_vor_vv_u32m1(result, field3, vl);
 }
 
-static vuint32m1_t base64_spread6_without_zvbext(vuint32m1_t payloads,
-                                                 size_t vl) {
+static vuint32m1_t base64_spread6_without_zvbce(vuint32m1_t payloads,
+                                                size_t vl) {
   vuint32m1_t field0 =
       __riscv_vand_vx_u32m1(payloads, UINT32_C(0x0000003f), vl);
   vuint32m1_t field1 =
@@ -50,7 +50,7 @@ static vuint32m1_t base64_spread6_without_zvbext(vuint32m1_t payloads,
   return __riscv_vor_vv_u32m1(result, field3, vl);
 }
 
-static vuint32m1_t uleb28_spread_without_zvbext(vuint32m1_t values, size_t vl) {
+static vuint32m1_t uleb28_spread_without_zvbce(vuint32m1_t values, size_t vl) {
   vuint32m1_t byte0 = __riscv_vand_vx_u32m1(values, UINT32_C(0x0000007f), vl);
   vuint32m1_t byte1 = __riscv_vand_vx_u32m1(values, UINT32_C(0x00003f80), vl);
   byte1 = __riscv_vsll_vx_u32m1(byte1, 1, vl);
@@ -64,7 +64,7 @@ static vuint32m1_t uleb28_spread_without_zvbext(vuint32m1_t values, size_t vl) {
   return __riscv_vor_vv_u32m1(result, byte3, vl);
 }
 
-static vuint32m1_t uleb28_gather_without_zvbext(vuint32m1_t slots, size_t vl) {
+static vuint32m1_t uleb28_gather_without_zvbce(vuint32m1_t slots, size_t vl) {
   vuint32m1_t byte0 = __riscv_vand_vx_u32m1(slots, UINT32_C(0x0000007f), vl);
   vuint32m1_t byte1 = __riscv_vsrl_vx_u32m1(slots, 1, vl);
   byte1 = __riscv_vand_vx_u32m1(byte1, UINT32_C(0x00003f80), vl);
@@ -78,8 +78,8 @@ static vuint32m1_t uleb28_gather_without_zvbext(vuint32m1_t slots, size_t vl) {
   return __riscv_vor_vv_u32m1(result, byte3, vl);
 }
 
-static vuint32m1_t morton_spread16_without_zvbext(vuint32m1_t values,
-                                                  size_t vl) {
+static vuint32m1_t morton_spread16_without_zvbce(vuint32m1_t values,
+                                                 size_t vl) {
   values = __riscv_vand_vx_u32m1(values, UINT32_C(0x0000ffff), vl);
 
   vuint32m1_t shifted = __riscv_vsll_vx_u32m1(values, 8, vl);
@@ -99,8 +99,8 @@ static vuint32m1_t morton_spread16_without_zvbext(vuint32m1_t values,
   return __riscv_vand_vx_u32m1(values, UINT32_C(0x55555555), vl);
 }
 
-static vuint32m1_t morton_compact16_without_zvbext(vuint32m1_t values,
-                                                   size_t vl) {
+static vuint32m1_t morton_compact16_without_zvbce(vuint32m1_t values,
+                                                  size_t vl) {
   values = __riscv_vand_vx_u32m1(values, UINT32_C(0x55555555), vl);
 
   vuint32m1_t shifted = __riscv_vsrl_vx_u32m1(values, 1, vl);
@@ -125,7 +125,7 @@ void base64_decode_reshape(const uint32_t *input, uint32_t *output,
   while (count != 0) {
     size_t vl = __riscv_vsetvl_e32m1(count);
     vuint32m1_t words = __riscv_vle32_v_u32m1(input, vl);
-    vuint32m1_t payloads = base64_pack6_without_zvbext(words, vl);
+    vuint32m1_t payloads = base64_pack6_without_zvbce(words, vl);
     __riscv_vse32_v_u32m1(output, payloads, vl);
     input += vl;
     output += vl;
@@ -138,7 +138,7 @@ void base64_encode_reshape(const uint32_t *input, uint32_t *output,
   while (count != 0) {
     size_t vl = __riscv_vsetvl_e32m1(count);
     vuint32m1_t payloads = __riscv_vle32_v_u32m1(input, vl);
-    vuint32m1_t words = base64_spread6_without_zvbext(payloads, vl);
+    vuint32m1_t words = base64_spread6_without_zvbce(payloads, vl);
     __riscv_vse32_v_u32m1(output, words, vl);
     input += vl;
     output += vl;
@@ -151,7 +151,7 @@ void uleb28_encode_payloads(const uint32_t *input, uint32_t *output,
   while (count != 0) {
     size_t vl = __riscv_vsetvl_e32m1(count);
     vuint32m1_t values = __riscv_vle32_v_u32m1(input, vl);
-    vuint32m1_t slots = uleb28_spread_without_zvbext(values, vl);
+    vuint32m1_t slots = uleb28_spread_without_zvbce(values, vl);
     __riscv_vse32_v_u32m1(output, slots, vl);
     input += vl;
     output += vl;
@@ -164,7 +164,7 @@ void uleb28_decode_payloads(const uint32_t *input, uint32_t *output,
   while (count != 0) {
     size_t vl = __riscv_vsetvl_e32m1(count);
     vuint32m1_t slots = __riscv_vle32_v_u32m1(input, vl);
-    vuint32m1_t values = uleb28_gather_without_zvbext(slots, vl);
+    vuint32m1_t values = uleb28_gather_without_zvbce(slots, vl);
     __riscv_vse32_v_u32m1(output, values, vl);
     input += vl;
     output += vl;
@@ -178,8 +178,8 @@ void morton2d_encode(const uint32_t *x, const uint32_t *y, uint32_t *output,
     size_t vl = __riscv_vsetvl_e32m1(count);
     vuint32m1_t xs = __riscv_vle32_v_u32m1(x, vl);
     vuint32m1_t ys = __riscv_vle32_v_u32m1(y, vl);
-    xs = morton_spread16_without_zvbext(xs, vl);
-    ys = morton_spread16_without_zvbext(ys, vl);
+    xs = morton_spread16_without_zvbce(xs, vl);
+    ys = morton_spread16_without_zvbce(ys, vl);
     ys = __riscv_vsll_vx_u32m1(ys, 1, vl);
     vuint32m1_t codes = __riscv_vor_vv_u32m1(xs, ys, vl);
     __riscv_vse32_v_u32m1(output, codes, vl);
@@ -195,9 +195,9 @@ void morton2d_decode(const uint32_t *input, uint32_t *x, uint32_t *y,
   while (count != 0) {
     size_t vl = __riscv_vsetvl_e32m1(count);
     vuint32m1_t codes = __riscv_vle32_v_u32m1(input, vl);
-    vuint32m1_t xs = morton_compact16_without_zvbext(codes, vl);
+    vuint32m1_t xs = morton_compact16_without_zvbce(codes, vl);
     codes = __riscv_vsrl_vx_u32m1(codes, 1, vl);
-    vuint32m1_t ys = morton_compact16_without_zvbext(codes, vl);
+    vuint32m1_t ys = morton_compact16_without_zvbce(codes, vl);
     __riscv_vse32_v_u32m1(x, xs, vl);
     __riscv_vse32_v_u32m1(y, ys, vl);
     input += vl;

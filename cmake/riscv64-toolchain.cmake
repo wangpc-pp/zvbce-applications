@@ -3,7 +3,7 @@ set(CMAKE_SYSTEM_PROCESSOR riscv64)
 
 if(NOT DEFINED ENV{RISCV_CLANG} OR "$ENV{RISCV_CLANG}" STREQUAL "")
   message(FATAL_ERROR
-          "RISCV_CLANG must point to a Clang compiler with Zvbext support")
+          "RISCV_CLANG must point to a Clang compiler with Zvbce support")
 endif()
 
 if(NOT DEFINED ENV{RISCV_SYSROOT} OR "$ENV{RISCV_SYSROOT}" STREQUAL "")
